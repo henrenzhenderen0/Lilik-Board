@@ -7,7 +7,7 @@ from threading import Thread
 
 
 # 设置 OPENAI_API_KEY 环境变量
-os.environ["OPENAI_API_KEY"] = "sk-0J5Vz5zfqINwt9z7De09Fd552bBf4b39918e4eF5BcC102Ed"  # 请替换为你的实际API密钥
+os.environ["OPENAI_API_KEY"] = "sk-xxxxxxxx"  # 请替换为你的实际API密钥
 # 设置 OPENAI_BASE_URL 环境变量
 os.environ["OPENAI_BASE_URL"] = "https://api.xiaoai.plus/v1"  # 请替换为你的实际API基本URL
 
