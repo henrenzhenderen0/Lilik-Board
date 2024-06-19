@@ -5,9 +5,6 @@ import os
 import json
 from threading import Thread
 
-
-
-
 # Constants
 CONTEXT_WINDOW_SIZE = 4
 SESSION_DIR = "D:/GPTASSISTANT/sessions"
@@ -52,7 +49,7 @@ class ChatGPTGUI(tk.Tk):
         self.context_window = []
 
         self.create_widgets()
-        self.create_menu()  # 修改：添加了对create_menu函数的调用
+        self.create_menu()  
         self.load_session()
 
     def create_widgets(self):
@@ -66,7 +63,7 @@ class ChatGPTGUI(tk.Tk):
         self.send_button = tk.Button(self, text="Send", command=self.on_enter)
         self.send_button.pack()
 
-    def create_menu(self):  # 修改：新增的函数
+    def create_menu(self):  
         menubar = tk.Menu(self)
         self.config(menu=menubar)
         
@@ -75,12 +72,11 @@ class ChatGPTGUI(tk.Tk):
         settings_menu.add_command(label="Set API Key", command=self.set_api_key)
         settings_menu.add_command(label="Set BASE URL", command=self.set_base_url)
     
-    def set_api_key(self):  # 修改：新增的函数
+    def set_api_key(self):  
         new_api_key = simpledialog.askstring("Set API Key", "Enter new API Key:")
         if new_api_key:
-            # os.environ["OPENAI_API_KEY"] = new_api_key
-            new_api_key = new_api_key.strip()  # 去除末尾的换行和空格
-            config["OPENAI_API_KEY"] = new_api_key  # 新增：更新配置
+            new_api_key = new_api_key.strip()  
+            config["OPENAI_API_KEY"] = new_api_key  
             with open(CONFIG_FILE, "w") as f: 
                 json.dump(config, f)
             messagebox.showinfo("Info", "API Key updated. Please restart the application to apply changes.")
@@ -88,9 +84,8 @@ class ChatGPTGUI(tk.Tk):
     def set_base_url(self):  # 修改：新增的函数
         new_base_url = simpledialog.askstring("Set base url", "Enter new base url:")
         if new_base_url:
-            # os.environ["OPENAI_API_KEY"] = new_api_key
-            new_base_url = new_base_url.strip()  # 去除末尾的换行和空格
-            config["OPENAI_BASE_URL"] = new_base_url  # 新增：更新配置
+            new_base_url = new_base_url.strip()  
+            config["OPENAI_BASE_URL"] = new_base_url 
             with open(CONFIG_FILE, "w") as f: 
                 json.dump(config, f)
             messagebox.showinfo("Info", "Base URL updated. Please restart the application to apply changes.")
@@ -98,16 +93,47 @@ class ChatGPTGUI(tk.Tk):
    
     def load_session(self):
         session_files = [f for f in os.listdir(SESSION_DIR) if f.endswith(".json")]
-        if session_files:
-            session_file = simpledialog.askstring("Load Session", f"Available sessions: {', '.join(session_files)}")
-            if session_file:
-                self.session_file = os.path.join(SESSION_DIR, session_file)
+        
+        # 添加一个新会话的选项
+        session_files.insert(0, "Create New Session")
+        
+        # 使用弹出窗口显示可用的会话文件
+        dialog = tk.Toplevel(self)
+        dialog.title("Load Session")
+
+        listbox = tk.Listbox(dialog, selectmode=tk.SINGLE)
+        for session_file in session_files:
+            listbox.insert(tk.END, session_file)
+        listbox.pack(padx=10, pady=10)
+
+        def on_select():
+            selected_file = listbox.get(tk.ACTIVE)
+            if selected_file == "Create New Session":
+                self.session_file = None  # 新会话
+                self.history = []
+                self.text_display.delete(1.0, tk.END)
+                self.context_window = []
+                self.save_session()  # 保存新会话文件
+            elif selected_file:
+                self.session_file = os.path.join(SESSION_DIR, selected_file)
                 if os.path.exists(self.session_file):
                     with open(self.session_file, "r") as f:
                         self.history = json.load(f)
                     for message in self.history:
                         self.text_display.insert(tk.END, f"{message['role']}: {message['content']}\n")
                     self.context_window = self.history[-CONTEXT_WINDOW_SIZE:]
+            dialog.destroy()
+
+        load_button = tk.Button(dialog, text="Load", command=on_select)
+        load_button.pack(pady=10)
+
+        cancel_button = tk.Button(dialog, text="Cancel", command=dialog.destroy)
+        cancel_button.pack()
+
+        dialog.transient(self)
+        dialog.grab_set()
+        self.wait_window(dialog)
+
 
     def on_enter(self, event=None):
         user_input = self.entry.get()
