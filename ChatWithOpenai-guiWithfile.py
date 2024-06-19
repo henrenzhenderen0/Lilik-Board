@@ -7,7 +7,7 @@ from threading import Thread
 
 
 # 设置 OPENAI_API_KEY 环境变量
-os.environ["OPENAI_API_KEY"] = "sk-0J5Vz5zfqINwt9z7De09Fd552bBf4b39918e4eF5BcC102Ed"  # 请替换为你的实际API密钥
+os.environ["OPENAI_API_KEY"] = "sk-xxxxxxxx"  # 请替换为你的实际API密钥
 # 设置 OPENAI_BASE_URL 环境变量
 os.environ["OPENAI_BASE_URL"] = "https://api.xiaoai.plus/v1"  # 请替换为你的实际API基本URL
 
@@ -76,6 +76,7 @@ class ChatGPTGUI(tk.Tk):
         if len(self.context_window) > CONTEXT_WINDOW_SIZE:
             self.context_window.pop(0)
         self.text_display.insert(tk.END, f"{role}: {content}\n")
+        self.text_display.see(tk.END)
 
     def generate_response(self, user_input):
         def async_generate():
@@ -88,14 +89,20 @@ class ChatGPTGUI(tk.Tk):
                 )
 
                 response_content = ""
+                self.text_display.insert(tk.END, "assistant:")
                 for chunk in response:
                     if chunk.choices[0].delta.content is not None:
                         chunk_content=chunk.choices[0].delta.content
                         response_content += chunk_content
                         self.text_display.insert(tk.END, chunk_content)
                         self.text_display.see(tk.END)
+                self.text_display.insert(tk.END,"\n")
+                
 
-                self.add_message("assistant", response_content.strip())
+                self.history.append({"role": "assistant", "content": response_content})
+                self.context_window.append({"role": "assistant", "content": response_content})
+                if len(self.context_window) > CONTEXT_WINDOW_SIZE:
+                    self.context_window.pop(0)
                 self.save_session()
             except Exception as e:
                 messagebox.showerror("Error", str(e))
