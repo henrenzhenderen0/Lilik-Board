@@ -1,150 +1,121 @@
-import openai
-import os
-# 设置 OPENAI_API_KEY 环境变量
-os.environ["OPENAI_API_KEY"] = "sk-xxxxxxxx"
-# 设置 OPENAI_BASE_URL 环境变量
-os.environ["OPENAI_BASE_URL"] = "https://api.xiaoai.plus/v1"
-import json
 import tkinter as tk
-from tkinter import scrolledtext, filedialog
-from tkinter import ttk
-from requests.exceptions import Timeout
+from tkinter import simpledialog, messagebox
+from openai import OpenAI
+import os
+import json
+from threading import Thread
 
-def save_session_data(session_data, file_path='session_data.json'):
-    with open(file_path, 'w') as file:
-        json.dump(session_data, file)
 
-def load_session_data(file_path='session_data.json'):
-    if os.path.exists(file_path):
-        with open(file_path, 'r') as file:
-            return json.load(file)
-    else:
-        return {}
+# 设置 OPENAI_API_KEY 环境变量
+os.environ["OPENAI_API_KEY"] = "sk-0J5Vz5zfqINwt9z7De09Fd552bBf4b39918e4eF5BcC102Ed"  # 请替换为你的实际API密钥
+# 设置 OPENAI_BASE_URL 环境变量
+os.environ["OPENAI_BASE_URL"] = "https://api.xiaoai.plus/v1"  # 请替换为你的实际API基本URL
 
-def chat_with_gpt(prompt, client, session_id, session_data):
-    session_data[session_id]["messages"].append({"role": "user", "content": prompt})
 
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=session_data[session_id]["messages"]
-        )
-    except Timeout as e:
-        return "请求超时，请检查网络连接或稍后重试。"
-    except openai.error.OpenAIError as e:
-        return f"OpenAI API 错误: {e}"
-    except Exception as e:
-        return f"其他错误: {e}"
-
-    message = response.choices[0].message.content
-    session_data[session_id]["messages"].append({"role": "assistant", "content": message})
-    save_session_data(session_data)
-    return message
-
-def select_session(session_data):
-    if session_data:
-        print("可用会话列表:")
-        for session_id in session_data.keys():
-            print(f"会话 {session_id}:上有 {len(session_data[session_id]['messages'])} 条消息")
-        session_id = input("输入会话ID或 'new' 开始新会话: ")
-        if session_id.lower() == 'new' or session_id not in session_data:
-            session_id = str(max([int(sid) for sid in session_data.keys()], default=0) + 1)
-            session_data[session_id] = {"messages": []}
-    else:
-        print("开始新的会话。")
-        session_id = "1"
-        session_data[session_id] = {"messages": []}
-    return session_id
-
-def load_chat_history(session_id, session_data):
-    if session_id in session_data and session_data[session_id]["messages"]:
-        for message in session_data[session_id]["messages"]:
-            role = "You" if message["role"] == "user" else "ChatGPT"
-            chat_history.config(state=tk.NORMAL)
-            chat_history.insert(tk.END, f"{role}: {message['content']}\n")
-            chat_history.config(state=tk.DISABLED)
-
-def send_message():
-    prompt = user_input.get("1.0", tk.END).strip()
-    if prompt:
-        # 检查是否有附件内容
-        attachment_text = attachment_content.get().strip()
-        if attachment_text:
-            prompt += f"\n\n{attachment_text}"
-            attachment_content.set("")  # 清空附件内容
-        
-        response = chat_with_gpt(prompt, client, session_id, session_data)
-        chat_history.config(state=tk.NORMAL)
-        chat_history.insert(tk.END, "You: " + prompt + "\n")
-        chat_history.insert(tk.END, "ChatGPT: " + response + "\n\n")
-        chat_history.config(state=tk.DISABLED)
-        user_input.delete("1.0", tk.END)
-
-def add_attachment():
-    file_path = filedialog.askopenfilename()
-    if file_path:
-        with open(file_path, 'r', encoding='utf-8') as file:
-            file_content = file.read()
-        attachment_content.set(f"附件内容:\n{file_content}")
-        chat_history.config(state=tk.NORMAL)
-        chat_history.insert(tk.END, f"附件内容:\n{file_content}\n")
-        chat_history.config(state=tk.DISABLED)
-
-def on_closing():
-    save_session_data(session_data)
-    root.destroy()
-
+# Constants
+CONTEXT_WINDOW_SIZE = 4
+SESSION_DIR = "sessions"
+os.makedirs(SESSION_DIR, exist_ok=True)
 # 设置API客户端
-client = openai.OpenAI(
+client = OpenAI(
     api_key=os.environ.get("OPENAI_API_KEY"),  # 从环境变量中获取API密钥
     base_url=os.environ.get("OPENAI_BASE_URL")  # 从环境变量中获取API基本URL
 )
 
-session_data = load_session_data()
-session_id = select_session(session_data)
 
-# 创建主窗口
-root = tk.Tk()
-root.title("ChatGPT 对话")
+class ChatGPTGUI(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("ChatGPT GUI")
+        self.geometry("600x400")
+        self.minsize(400, 300)
+        self.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self.attributes("-topmost", True)
 
-# 设置窗口可以拉伸
-root.rowconfigure(0, weight=1)
-root.columnconfigure(0, weight=1)
+        self.session_file = None
+        self.history = []
+        self.context_window = []
 
-# 创建主框架
-main_frame = ttk.Frame(root, padding="10 10 10 10")
-main_frame.grid(row=0, column=0, sticky=(tk.N, tk.W, tk.E, tk.S))
+        self.create_widgets()
+        self.load_session()
 
-# 设置主框架可以拉伸
-main_frame.rowconfigure(0, weight=1)
-main_frame.columnconfigure(0, weight=1)
+    def create_widgets(self):
+        self.text_display = tk.Text(self, wrap=tk.WORD)
+        self.text_display.pack(expand=True, fill=tk.BOTH)
 
-# 创建聊天记录窗口
-chat_history = scrolledtext.ScrolledText(main_frame, wrap=tk.WORD, state=tk.DISABLED, width=80, height=20)
-chat_history.grid(row=0, column=0, columnspan=2, sticky=(tk.N, tk.W, tk.E, tk.S))
+        self.entry = tk.Entry(self)
+        self.entry.pack(fill=tk.X)
+        self.entry.bind("<Return>", self.on_enter)
 
-# 设置聊天记录窗口可以拉伸
-chat_history.rowconfigure(0, weight=1)
-chat_history.columnconfigure(0, weight=1)
+        self.send_button = tk.Button(self, text="Send", command=self.on_enter)
+        self.send_button.pack()
 
-# 加载历史对话
-load_chat_history(session_id, session_data)
+    def load_session(self):
+        session_files = [f for f in os.listdir(SESSION_DIR) if f.endswith(".json")]
+        if session_files:
+            session_file = simpledialog.askstring("Load Session", f"Available sessions: {', '.join(session_files)}")
+            if session_file:
+                self.session_file = os.path.join(SESSION_DIR, session_file)
+                if os.path.exists(self.session_file):
+                    with open(self.session_file, "r") as f:
+                        self.history = json.load(f)
+                    for message in self.history:
+                        self.text_display.insert(tk.END, f"{message['role']}: {message['content']}\n")
+                    self.context_window = self.history[-CONTEXT_WINDOW_SIZE:]
 
-# 创建用户输入框
-user_input = tk.Text(main_frame, height=3, width=60)
-user_input.grid(row=1, column=0, padx=5, pady=5, sticky=(tk.W, tk.E))
+    def on_enter(self, event=None):
+        user_input = self.entry.get()
+        if user_input:
+            self.add_message("user", user_input)
+            self.entry.delete(0, tk.END)
+            self.generate_response(user_input)
 
-# 创建发送按钮
-send_button = ttk.Button(main_frame, text="发送", command=send_message)
-send_button.grid(row=1, column=1, padx=5, pady=5, sticky=tk.E)
+    def add_message(self, role, content):
+        self.history.append({"role": role, "content": content})
+        self.context_window.append({"role": role, "content": content})
+        if len(self.context_window) > CONTEXT_WINDOW_SIZE:
+            self.context_window.pop(0)
+        self.text_display.insert(tk.END, f"{role}: {content}\n")
 
-# 创建添加附件按钮
-attachment_content = tk.StringVar()
-attachment_button = ttk.Button(main_frame, text="添加附件", command=add_attachment)
-attachment_button.grid(row=2, column=0, columnspan=2, pady=5, sticky=tk.W)
+    def generate_response(self, user_input):
+        def async_generate():
+            try:
+                response = client.chat.completions.create(
+                    model="gpt-4",
+                    messages=self.context_window,
+                    temperature=0.7,
+                    stream=True
+                )
 
-# 绑定关闭事件
-root.protocol("WM_DELETE_WINDOW", on_closing)
+                response_content = ""
+                for chunk in response:
+                    if chunk.choices[0].delta.content is not None:
+                        chunk_content=chunk.choices[0].delta.content
+                        response_content += chunk_content
+                        self.text_display.insert(tk.END, chunk_content)
+                        self.text_display.see(tk.END)
 
-# 运行主循环
-root.mainloop()
+                self.add_message("assistant", response_content.strip())
+                self.save_session()
+            except Exception as e:
+                messagebox.showerror("Error", str(e))
+
+        Thread(target=async_generate).start()
+
+    def format_prompt(self):
+        return "\n".join([f"{msg['role']}: {msg['content']}" for msg in self.context_window])
+
+    def save_session(self):
+        if not self.session_file:
+            self.session_file = os.path.join(SESSION_DIR, simpledialog.askstring("Save Session", "Enter session name:") + ".json")
+        with open(self.session_file, "w") as f:
+            json.dump(self.history, f)
+
+    def on_closing(self):
+        if messagebox.askokcancel("Quit", "Do you want to quit?"):
+            self.save_session()
+            self.destroy()
+
+if __name__ == "__main__":
+    app = ChatGPTGUI()
+    app.mainloop()
