@@ -171,7 +171,7 @@ class ChatGPTGUI(tk.Tk):
                 )
 
                 response_content = ""
-                self.text_display.insert(tk.END, "assistant:")
+                self.text_display.insert(tk.END, "ChatGPT:")
                 for chunk in response:
                     if chunk.choices[0].delta.content is not None:
                         chunk_content=chunk.choices[0].delta.content
