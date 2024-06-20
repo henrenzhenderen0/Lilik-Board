@@ -11,6 +11,7 @@ SESSION_DIR = "D:/GPTASSISTANT/sessions"
 CONFIG_FILE = "D:/GPTASSISTANT/config.json"
 API_KEY=""
 BASE_URL=""
+BASE_TEMPERATURE=0.7
 os.makedirs(SESSION_DIR, exist_ok=True)
 
 def load_config():
@@ -71,6 +72,7 @@ class ChatGPTGUI(tk.Tk):
         menubar.add_cascade(label="Settings", menu=settings_menu)
         settings_menu.add_command(label="Set API Key", command=self.set_api_key)
         settings_menu.add_command(label="Set BASE URL", command=self.set_base_url)
+        settings_menu.add_command(label="Set Temperature", command=self.set_temperature)
     
     def set_api_key(self):  
         new_api_key = simpledialog.askstring("Set API Key", "Enter new API Key:")
@@ -90,7 +92,15 @@ class ChatGPTGUI(tk.Tk):
                 json.dump(config, f)
             messagebox.showinfo("Info", "Base URL updated. Please restart the application to apply changes.")
 
-   
+    def set_temperature(self):  # 修改：新增的函数
+        global BASE_TEMPERATURE
+        new_temperature = simpledialog.askstring("Set temperature", "Enter new temperature:")
+        if new_temperature:
+            new_temperature = new_temperature.strip()  
+            BASE_TEMPERATURE=new_temperature
+            messagebox.showinfo("Info", "Temperature has changed.")
+
+
     def load_session(self):
         session_files = [f for f in os.listdir(SESSION_DIR) if f.endswith(".json")]
         
@@ -156,7 +166,7 @@ class ChatGPTGUI(tk.Tk):
                 response = client.chat.completions.create(
                     model="gpt-4",
                     messages=self.context_window,
-                    temperature=0.7,
+                    temperature=BASE_TEMPERATURE,
                     stream=True
                 )
 
