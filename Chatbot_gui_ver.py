@@ -19,13 +19,13 @@ def load_config():
         with open(CONFIG_FILE, "r") as f:
             config = json.load(f)
             config["OPENAI_API_KEY"] = config.get("OPENAI_API_KEY", "").strip()  # 去除末尾的换行和空格
-            config["OPENAI_BASE_URL"] = config.get("OPENAI_BASE_URL", "https://api.xiaoai.plus/v1").strip()  # 去除末尾的换行和空格
+            config["OPENAI_BASE_URL"] = config.get("OPENAI_BASE_URL", "https://api.openai.com/v1/").strip()  # 去除末尾的换行和空格
             return config
-    return {"OPENAI_API_KEY": "", "OPENAI_BASE_URL": "https://api.xiaoai.plus/v1"}
+    return {"OPENAI_API_KEY": "", "OPENAI_BASE_URL": ""}
 
 config = load_config()
 API_KEY = config.get("OPENAI_API_KEY", "sk-xxxxxxxx")  # 默认值为占位符
-BASE_URL= config.get("OPENAI_BASE_URL","https://api.xiaoai.plus/v1")  # 默认值为占位符
+BASE_URL= config.get("OPENAI_BASE_URL","https://api.openai.com/v1/")  # 默认值为占位符
 
 # 设置API客户端
 client = OpenAI(
@@ -97,8 +97,11 @@ class ChatGPTGUI(tk.Tk):
         new_temperature = simpledialog.askstring("Set temperature", "Enter new temperature:")
         if new_temperature:
             new_temperature = new_temperature.strip()  
-            BASE_TEMPERATURE=new_temperature
-            messagebox.showinfo("Info", "Temperature has changed.")
+            try:
+                BASE_TEMPERATURE = float(new_temperature)  # 将字符串转换为浮点数
+                messagebox.showinfo("Info", "Temperature has changed.")
+            except ValueError:
+                messagebox.showerror("Error", "Invalid temperature value. Please enter a numeric value.")
 
 
     def load_session(self):
