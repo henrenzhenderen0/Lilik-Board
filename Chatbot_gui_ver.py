@@ -228,14 +228,7 @@ class ChatGPTGUI(tk.Tk):
                     stream=True
                 )
 
-                response_content = ""
                 self.text_display.insert(tk.END, "ChatGPT:")
-                # for chunk in response:
-                #     if chunk.choices[0].delta.content is not None:
-                #         chunk_content=chunk.choices[0].delta.content
-                #         response_content += chunk_content
-                #         self.text_display.insert(tk.END, chunk_content)
-                #         self.text_display.see(tk.END)
                 self.stream_output(response)
                 self.text_display.insert(tk.END,"\n")             
             except Exception as e:
@@ -268,23 +261,34 @@ class ChatGPTGUI(tk.Tk):
 
     def stream_output(self, response):
         response_content = ""
+        buffer = ""
         for chunk in response:
-            if chunk.choices[0].delta.content is not None:
-                text_chunk = chunk.choices[0].delta.content
+            if chunk.choices[0].delta.content is not None: 
+                text_chunk = chunk.choices[0].delta.content 
                 response_content += text_chunk
-                with self.condition:
-                    self.queue.put(text_chunk)
-                    self.condition.notify()
+                if not RP_FORMAT:
+                    with self.condition:
+                        self.queue.put(text_chunk)
+                        self.condition.notify()
+
+                else:
+                    buffer += text_chunk
+                    if buffer.endswith("\n"):
+                        html_chunk = markdown.markdown(buffer)
+                        with self.condition:
+                            self.queue.put(html_chunk)
+                            self.condition.notify()
+                        buffer = ""
+        if buffer:
+            html_chunk = markdown.markdown(buffer)
+            with self.condition:
+                self.queue.put(html_chunk)
+                self.condition.notify()
         self.history.append({"role": "assistant", "content": response_content})     #将完整响应内容加入会话历史
         self.context_window.append({"role": "assistant", "content": response_content})      #将完整响应内容加入上下文窗口
         if len(self.context_window) > CONTEXT_WINDOW_SIZE:
             self.context_window.pop(0)
         self.save_session()
-                # self.text_display.configure(state='normal')
-                # self.insert_markdown(markdown_text)
-                # self.text_display.configure(state='disabled')
-                # self.text_display.update_idletasks()
-
     
     def format_prompt(self):
         return "\n".join([f"{msg['role']}: {msg['content']}" for msg in self.context_window])
