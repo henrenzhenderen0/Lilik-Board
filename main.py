@@ -245,10 +245,10 @@ def render_md():
 					lb.insert('','end',value=j)
 			except:
 				n = 0
-				lb = proc(i)
+				lb = proc(i)	#输出普通正文
 		if(not isinstance(lb,list)):
 			lb = [lb]
-		for i in lb:	#输出普通正文
+		for i in lb:	
 			display.window_create(tk.INSERT,window=i)
 		display.insert(tk.INSERT,'\n')
 		l += 1
