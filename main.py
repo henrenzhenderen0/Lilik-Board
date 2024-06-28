@@ -159,7 +159,7 @@ def get_image(link):
 	img_io = get_image_io(link)
 	img = Image.open(img_io)
 	return ImageTk.PhotoImage(img)
-def get_spliter():
+def get_spliter():	#生成分割线
 	w = max(1,display.winfo_width() - 6)
 	img = Image.new('RGB',(w,1),(221,221,221))
 	return ImageTk.PhotoImage(img)
@@ -170,14 +170,14 @@ def render_md():
 	code = False
 	buf = ''
 	n = 0
-	for i in cont.split('\n'):
+	for i in cont.split('\n'):	#按行分割markdown文本，并进行匹配渲染
 		if(n):
 			n -= 1
 			continue
-		if(code and i != '```'):
+		if(code and i != '```'):	#将代码部分进行累积渲染
 			buf += i + '\n'
 			continue
-		if(i.startswith('# ')):
+		if(i.startswith('# ')):	#渲染标题
 			lb = tk.Label(display,text=i[2:],font=(fontname,40,'bold'))
 		elif(i.startswith('## ')):
 			lb = tk.Label(display,text=i[3:],font=(fontname,35,'bold'))
@@ -189,30 +189,30 @@ def render_md():
 			lb = tk.Label(display,text=i[6:],font=(fontname,20,'bold'))
 		elif(i.startswith('###### ')):
 			lb = tk.Label(display,text=i[7:],font=(fontname,15,'bold'))
-		elif(i.startswith('- [ ] ')):
+		elif(i.startswith('- [ ] ')):	#渲染复选框
 			cbtn = tk.Checkbutton(display,text='',state=tk.DISABLED)
 			lb = [cbtn] + proc(i[6:])
 		elif(i.startswith('- [x] ')):
 			cbtn = tk.Checkbutton(display,text='',state=tk.DISABLED)
 			cbtn.select()
 			lb = [cbtn] + proc(i[6:])
-		elif(i.startswith('- ') or i.startswith('* ') or i.startswith('+ ')):
+		elif(i.startswith('- ') or i.startswith('* ') or i.startswith('+ ')):	#渲染列表
 			i = '● ' + i[2:]
 			lb = proc(i)
-		elif(i.startswith(': ')):
+		elif(i.startswith(': ')):	#渲染自定义列表
 			lb = proc('\t'+i[2:])
-		elif(i.startswith('$$') and i.endswith('$$') and i not in ('$$','$$$')):
+		elif(i.startswith('$$') and i.endswith('$$') and i not in ('$$','$$$')):	#渲染数学公式
 			imgTk = get_KaTeX(i[2:-2])
 			lb = tk.Label(display,image=imgTk)
 			lb.image = imgTk
-		elif(set(i) in ({'-'},{'*'}) and len(i) >= 3):
+		elif(set(i) in ({'-'},{'*'}) and len(i) >= 3):	#渲染分割线
 			imgTk = get_spliter()
 			lb = tk.Label(display,image=imgTk)
 			lb.image = imgTk
-		elif(i == '```'):
+		elif(re.search(r'```.*', i)):	#渲染代码片：识别代码片入口
 			if(code):
-				lb = tk.Text(display)
-				lb.insert(0.0,buf)
+				lb = tk.Text(display)	#创建新的文本部件以显示代码片
+				lb.insert(0.0,buf)	#插入累计的代码片
 				h = float(lb.index(tk.END)) - 2
 				lb.config(height=h)
 				buf = ''
@@ -220,8 +220,8 @@ def render_md():
 			else:
 				code = True
 				continue
-		else:
-			try:
+		else:	
+			try:	#渲染表格
 				head = i.split('|')
 				check = cont.split('\n')[l + 1].split('|')
 				assert len(head) == len(check)
@@ -248,7 +248,7 @@ def render_md():
 				lb = proc(i)
 		if(not isinstance(lb,list)):
 			lb = [lb]
-		for i in lb:
+		for i in lb:	#输出普通正文
 			display.window_create(tk.INSERT,window=i)
 		display.insert(tk.INSERT,'\n')
 		l += 1
