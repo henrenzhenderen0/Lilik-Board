@@ -1,14 +1,15 @@
 import queue
 import tkinter as tk
 from threading import Thread, Condition
-from tkinter import simpledialog, messagebox
+from tkinter import simpledialog, messagebox,ttk
+import tkinter.font as tkFont
+import requests
+import io
 from openai import OpenAI
 import os
 import json
 from threading import Thread
-import markdown
-from bs4 import BeautifulSoup
-import re
+from PIL import Image,ImageDraw,ImageTk
 
 # Constants
 CONTEXT_WINDOW_SIZE = 4
@@ -18,6 +19,7 @@ API_KEY=""
 BASE_URL=""
 BASE_TEMPERATURE=0.7
 RP_FORMAT=True
+fontname = "黑体"
 os.makedirs(SESSION_DIR, exist_ok=True)
 
 
@@ -65,8 +67,9 @@ class ChatGPTGUI(tk.Tk):
         self.start_queue_processor()
 
     def create_widgets(self):
-        self.text_display = tk.Text(self, wrap=tk.WORD)
-        self.text_display.pack(expand=True, fill=tk.BOTH)
+        self.display = tk.Text(self, wrap=tk.WORD)
+        self.display.grid(row=0,column=0)
+        self.display.pack(expand=True, fill=tk.BOTH)
 
         self.entry = tk.Entry(self)
         self.entry.pack(fill=tk.X)
@@ -127,33 +130,118 @@ class ChatGPTGUI(tk.Tk):
         global RP_FORMAT
         RP_FORMAT = self.format_var.get()
 
-    def insert_markdown(self, markdown_text):
-        print(markdown_text,end="")
-        html = markdown.markdown(markdown_text)
-        # print(html)
-        soup = BeautifulSoup(html, features="html.parser")
+    
+    
+    def get_KaTeX_io(katex):
+        resp = requests.get(r'https://latex.codecogs.com/png.image?\dpi{110} ' + katex)
+        return io.BytesIO(resp.content)
+    def get_image_io(link):
+        resp = requests.get(link)
+        return io.BytesIO(resp.content)
+    def get_KaTeX(self,katex):
+        img_io = self.get_KaTeX_io(katex)
+        img = Image.open(img_io)
+        return ImageTk.PhotoImage(img)
+    def get_image(self,link):
+        img_io = self.get_image_io(link)
+        img = Image.open(img_io)
+        return ImageTk.PhotoImage(img)
+    def get_spliter(self):	#生成分割线
+        w = max(1,self.display.winfo_width() - 6)
+        img = Image.new('RGB',(w,1),(221,221,221))
+        return ImageTk.PhotoImage(img)
         
-        for element in soup:
-            # print(f"Element: {element}")
-            if element.name == "p":
-                self.text_display.insert(tk.END, element.get_text() + "\n\n")
-            elif element.name == "strong":
-                self.text_display.insert(tk.END, element.get_text(), "bold")
-            elif element.name == "em":
-                self.text_display.insert(tk.END, element.get_text(), "italic")
-            elif element.name == "code":
-                self.text_display.insert(tk.END, element.get_text(), "code")
-            elif element.name == "pre":
-                code_block = element.find("code")
-                if code_block:
-                    language = code_block.get("class", [None])[0]
-                    self.text_display.insert(tk.END, code_block.get_text(), "codeblock")
-            elif element.name == "div" and "math" in element.get("class", []):
-                math_text = re.sub(r"\\\(", "$", re.sub(r"\\\)", "$", element.get_text()))
-                self.text_display.insert(tk.END, math_text, "math")
-        self.text_display.see(tk.END)
+    
+    
+    def proc(self,text):
+        res = text.split('$')
+        for i in range(len(res)):
+            if(i % 2):
+                imgTk = self.get_KaTeX(res[i])
+                res[i] = tk.Label(self.display,image=imgTk)
+                res[i].image = imgTk
+        newres = []
+        for i in range(len(res)):
+            if(not isinstance(res[i],str)):
+                newres.append(res[i])
+                continue
+            s = res[i].split('`')
+            for j in range(len(s)):
+                if(j % 2):
+                    font = tkFont.nametofont("TkFixedFont")
+                    newres.append(tk.Label(self.display,text=s[j],font=font))
+                else:
+                    newres.append(s[j])
+    def clear(self):
+        self.display.delete(0.0,tk.END)               
 
+    def insert_markdown(self, markdown_text):
+        l = 0
+        n = 0
+        self.update()
+        self.clear()
 
+        if(markdown_text.startswith('# ')):	#渲染标题
+            lb = tk.Label(self.display,text=markdown_text[2:],font=(fontname,40,'bold'))
+        elif(markdown_text.startswith('## ')):
+            lb = tk.Label(self.display,text=markdown_text[3:],font=(fontname,35,'bold'))
+        elif(markdown_text.startswith('### ')):
+            lb = tk.Label(self.display,text=markdown_text[4:],font=(fontname,30,'bold'))
+        elif(markdown_text.startswith('#### ')):
+            lb = tk.Label(self.display,text=markdown_text[5:],font=(fontname,25,'bold'))
+        elif(markdown_text.startswith('##### ')):
+            lb = tk.Label(self.display,text=markdown_text[6:],font=(fontname,20,'bold'))
+        elif(markdown_text.startswith('###### ')):
+            lb = tk.Label(self.display,text=markdown_text[7:],font=(fontname,15,'bold'))
+        elif(markdown_text.startswith('- [ ] ')):	#渲染复选框
+            cbtn = tk.Checkbutton(self.display,text='',state=tk.DISABLED)
+            lb = [cbtn] + self.proc(markdown_text[6:])
+        elif(markdown_text.startswith('- [x] ')):
+            cbtn = tk.Checkbutton(self.display,text='',state=tk.DISABLED)
+            cbtn.select()
+            lb = [cbtn] + self.proc(markdown_text[6:])
+        elif(markdown_text.startswith('- ') or markdown_text.startswith('* ') or markdown_text.startswith('+ ')):	#渲染列表
+            markdown_text = '● ' + markdown_text[2:]
+            lb = self.proc(markdown_text)
+        elif(markdown_text.startswith(': ')):	#渲染自定义列表
+            lb = self.proc('\t'+markdown_text[2:])
+        elif(markdown_text.startswith('$$') and markdown_text.endswith('$$') and markdown_text not in ('$$','$$$')):	#渲染数学公式
+            imgTk = self.get_KaTeX(markdown_text[2:-2])
+            lb = tk.Label(self.display,image=imgTk)
+            lb.image = imgTk
+        elif(set(markdown_text) in ({'-'},{'*'}) and len(markdown_text) >= 3):	#渲染分割线
+            imgTk = self.get_spliter()
+            lb = tk.Label(self.display,image=imgTk)
+            lb.image = imgTk
+        else:	
+            try:	#渲染表格
+                head = markdown_text.split('|')
+                check = markdown_text.split('\n')[l + 1].split('|')
+                assert len(head) == len(check)
+                assert set(''.join(check)) == {'-'}
+                assert all(check)
+                body = []
+                after = markdown_text.split('\n')[l + 2:]
+                n = 1
+                for j in after:
+                    if(len(j.split('|')) == len(head)):
+                        body.append(j.split('|'))
+                    else:
+                        break
+                    l += 1
+                    n += 1
+                assert body
+                lb = ttk.Treeview(self.display,columns=[i for i in range(len(head))],show='headings')
+                for j in range(len(head)):
+                    lb.heading(j,text=head[j])
+                for j in body:
+                    lb.insert('','end',value=j)
+            except:
+                n = 0
+                lb = self.proc(markdown_text)	#输出普通正文
+        self.display.window_create(tk.INSERT,window=lb)
+        self.display.insert(tk.INSERT,'\n')
+        l += 1
 
     def load_session(self):
         session_files = [f for f in os.listdir(SESSION_DIR) if f.endswith(".json")]
@@ -175,7 +263,7 @@ class ChatGPTGUI(tk.Tk):
             if selected_file == "Create New Session":
                 self.session_file = None  # 新会话
                 self.history = []
-                self.text_display.delete(1.0, tk.END)
+                self.display.delete(1.0, tk.END)
                 self.context_window = []
                 self.save_session()  # 保存新会话文件
             elif selected_file:
@@ -184,7 +272,7 @@ class ChatGPTGUI(tk.Tk):
                     with open(self.session_file, "r") as f:
                         self.history = json.load(f)
                     for message in self.history:
-                        self.text_display.insert(tk.END, f"{message['role']}: {message['content']}\n")
+                        self.display.insert(tk.END, f"{message['role']}: {message['content']}\n")
                     self.context_window = self.history[-CONTEXT_WINDOW_SIZE:]
             dialog.destroy()
 
@@ -211,8 +299,8 @@ class ChatGPTGUI(tk.Tk):
         self.context_window.append({"role": role, "content": content})
         if len(self.context_window) > CONTEXT_WINDOW_SIZE:
             self.context_window.pop(0)
-        self.text_display.insert(tk.END, f"{role}: {content}\n")
-        self.text_display.see(tk.END)
+        self.display.insert(tk.END, f"{role}: {content}\n")
+        self.display.see(tk.END)
 
     def generate_response(self, user_input):
         def async_generate():
@@ -228,9 +316,9 @@ class ChatGPTGUI(tk.Tk):
                     stream=True
                 )
 
-                self.text_display.insert(tk.END, "ChatGPT:")
+                self.display.insert(tk.END, "ChatGPT:")
                 self.stream_output(response)
-                self.text_display.insert(tk.END,"\n")             
+                self.display.insert(tk.END,"\n")             
             except Exception as e:
                 messagebox.showerror("Error", str(e))
 
@@ -245,7 +333,7 @@ class ChatGPTGUI(tk.Tk):
 
         Thread(target=process_queue, daemon=True).start()   #启动新线程用以持续处理队列消息
 
-    def process_queue_items(self):
+    def process_queue_items(self):  #分配GUI显示任务
         while not self.queue.empty():
             chunk = self.queue.get()
             # print(chunk, end="")  # 检查输出的 chunk 块
@@ -254,9 +342,9 @@ class ChatGPTGUI(tk.Tk):
 
     def create_insert_markdown_callback(self, chunk):
         if RP_FORMAT:
-            return lambda: self.insert_markdown(chunk)
+            return lambda: self.insert_markdown(chunk)  #传入的chunk块是一行markdown文本
         else:
-            return lambda: self.text_display.insert(tk.END,chunk)
+            return lambda: self.display.insert(tk.END,chunk)
 
 
     def stream_output(self, response):
@@ -274,15 +362,15 @@ class ChatGPTGUI(tk.Tk):
                 else:
                     buffer += text_chunk
                     if buffer.endswith("\n"):
-                        html_chunk = markdown.markdown(buffer)
+                        # html_chunk = markdown.markdown(buffer)
                         with self.condition:
-                            self.queue.put(html_chunk)
+                            self.queue.put(buffer)
                             self.condition.notify()
                         buffer = ""
         if buffer:
-            html_chunk = markdown.markdown(buffer)
+            # html_chunk = markdown.markdown(buffer)
             with self.condition:
-                self.queue.put(html_chunk)
+                self.queue.put(buffer)
                 self.condition.notify()
         self.history.append({"role": "assistant", "content": response_content})     #将完整响应内容加入会话历史
         self.context_window.append({"role": "assistant", "content": response_content})      #将完整响应内容加入上下文窗口
