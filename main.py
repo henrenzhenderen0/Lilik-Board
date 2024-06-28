@@ -38,7 +38,8 @@ def proc(text):
 				newres.append(tk.Label(display,text=s[j],font=font))
 			else:
 				newres.append(s[j])
-	d = {
+	d = {	#匹配字体格式：正则表达式存在bugs，且我认为将所有可能字体情况使用正则表达式的排列组合进行匹配是繁琐的
+			#可以考虑使用栈匹配
 		"italic":["\*[^\*_~]+\*","_[^\*_~]+_"],
 		"bold":["\*\*[^\*_~]+\*\*","__[^\*_~]+__"],
 		"overstrike":["~~[^\*_~]+~~"],
@@ -245,10 +246,10 @@ def render_md():
 					lb.insert('','end',value=j)
 			except:
 				n = 0
-				lb = proc(i)
+				lb = proc(i)	#输出普通正文
 		if(not isinstance(lb,list)):
 			lb = [lb]
-		for i in lb:	#输出普通正文
+		for i in lb:	
 			display.window_create(tk.INSERT,window=i)
 		display.insert(tk.INSERT,'\n')
 		l += 1
